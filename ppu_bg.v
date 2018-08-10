@@ -169,7 +169,6 @@ begin
                     begin
                         //bitmap data for the next tile loaded into the upper 8 bits
                         //4(2*2)tile's palette number is the same
-                        //increment_horizontal_counter         = 1'b1;
                         d_bit_shift_0[15]   = q_palette_data_0[0];
                         d_bit_shift_0[14]   = q_palette_data_0[1];                  //the order is opposite:
                         d_bit_shift_0[13]   = q_palette_data_0[2];                  //the coordinate
@@ -280,7 +279,7 @@ begin
         begin
             if (q_coarse_Y == 5'b11101 && q_fine_Y == 3'b111)//the last line
             begin
-                d_fine_Y = 3'b000;
+                d_fine_Y                = 3'b000;
                 d_nametable_select[1]   = ~q_nametable_select[1];
                 d_nametable_select[0]   = q_nametable_select[0];
                 d_coarse_X              = q_coarse_X;
