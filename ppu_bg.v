@@ -136,106 +136,61 @@ end
 
 always @*
 begin
-    d_nametable_address             = q_nametable_address;
-    d_attribute_table_data          = q_attribute_table_data;
-    d_palette_data_0                = q_palette_data_0;
-    d_palette_data_1                = q_palette_data_1;
-    d_bit_shift_0                   = q_bit_shift_0;
-    d_bit_shift_1                   = q_bit_shift_1;
-    d_bit_shift_2                   = q_bit_shift_2;
-    d_bit_shift_3                   = q_bit_shift_3;
+    d_nametable_address     = q_nametable_select;
+    d_attribute_table_data  = q_attribute_table_data;
+    d_palette_data_0        = q_palette_data_0;
+    d_palette_data_1        = q_palette_data_1;
+    d_bit_shift_0           = q_bit_shift_0;
+    d_bit_shift_1           = q_bit_shift_1;
+    d_bit_shift_2           = q_bit_shift_2;
+    d_bit_shift_3           = q_bit_shift_3;
+    vram_address_select     = 3'b100;
     if (background_display_in)
     begin
-        if (current_y_in < 239 || next_y_in == 0)//when in the visible scanlines or the last line og invisible scanlines, prepare the data
+        if((current_y_in < 239) || (next_y_in == 0))
         begin
-            //cycle 1-256 and cycle 320-336
-            //need to read the Nametable byte, Attribute table byte, Tile bitmap low, Tile bitmap high
-            //2 16-bit shift registers - These contain the bitmap data for two tiles. 
-            //Every 8 cycles, the bitmap data for the next tile is loaded into the upper 8 bits of this shift register. 
-            //Meanwhile, the pixel to render is fetched from one of the lower 8 bits.
-            //2 8-bit shift registers - These contain the palette attributes for the lower 8 pixels of the 16-bit shift register. 
-            //These registers are fed by a latch which contains the palette attribute for the next tile. 
-            //Every 8 cycles, the latch is loaded with the palette attribute for the next tile.
-            if (current_x_in < 256 || (current_x_in >= 320 && current_x_in < 336))//shift the bit during a cycle
+            if ((current_x_in < 256) || ((current_x_in >= 320 && current_x_in < 336)))
             begin
+                 //cycle 1-256 and cycle 320-336
+                //need to read the Nametable byte, Attribute table byte, Tile bitmap low, Tile bitmap high
+                //2 16-bit shift registers - These contain the bitmap data for two tiles. 
+                //Every 8 cycles, the bitmap data for the next tile is loaded into the upper 8 bits of this shift register. 
+                //Meanwhile, the pixel to render is fetched from one of the lower 8 bits.
+                //2 8-bit shift registers - These contain the palette attributes for the lower 8 pixels of the 16-bit shift register. 
+                //These registers are fed by a latch which contains the palette attribute for the next tile. 
+                //Every 8 cycles, the latch is loaded with the palette attribute for the next tile.
                 if (pix_pulse_in)
-                begin
-                    //shift the upper 8 bits to the lower 8 bits
-                    d_bit_shift_0 = {1'b0, q_bit_shift_0[15:0]};
-                    d_bit_shift_1 = {1'b0, q_bit_shift_1[15:0]};
+                begin//shift the upper 8 bits to the lower 8 bits
+                    d_bit_shift_0 = {1'b0, q_bit_shift_0[15:1]};
+                    d_bit_shift_1 = {1'b0, q_bit_shift_1[15:1]};
                     d_bit_shift_2 = {q_bit_shift_2[8], q_bit_shift_2[8:1]};
-                    d_bit_shift_3 = {q_bit_shift_3[8], q_bit_shift_3[8:1]};
+                    d_bit_shift_3 = {q_bit_shift_3[8], q_bit_shift_3[8:1]};       
+                    if (current_x_in[2:0] == 3'h7)//every cycle(render 8 pixels) renew the value of register, move to the next tile
+                    begin
+                        //bitmap data for the next tile loaded into the upper 8 bits
+                        //4(2*2)tile's palette number is the same
+                        //increment_horizontal_counter         = 1'b1;
+                        d_bit_shift_0[15]   = q_palette_data_0[0];
+                        d_bit_shift_0[14]   = q_palette_data_0[1];                  //the order is opposite:
+                        d_bit_shift_0[13]   = q_palette_data_0[2];                  //the coordinate
+                        d_bit_shift_0[12]   = q_palette_data_0[3];                  // 0 ----------> 
+                        d_bit_shift_0[11]   = q_palette_data_0[4];                  //the bit count
+                        d_bit_shift_0[10]   = q_palette_data_0[5];                  // <---------- 0
+                        d_bit_shift_0[ 9]   = q_palette_data_0[6];
+                        d_bit_shift_0[ 8]   = q_palette_data_0[7];
+                        d_bit_shift_1[15]   = q_palette_data_1[0];
+                        d_bit_shift_1[14]   = q_palette_data_1[1];
+                        d_bit_shift_1[13]   = q_palette_data_1[2];
+                        d_bit_shift_1[12]   = q_palette_data_1[3];
+                        d_bit_shift_1[11]   = q_palette_data_1[4];
+                        d_bit_shift_1[10]   = q_palette_data_1[5];
+                        d_bit_shift_1[ 9]   = q_palette_data_1[6];
+                        d_bit_shift_1[ 8]   = q_palette_data_1[7];
+                        d_bit_shift_2[8]    = q_attribute_table_data[0];
+                        d_bit_shift_3[8]    = q_attribute_table_data[1]; 
+                    end                
                 end
-                if (pix_pulse_in && current_x_in[2:0] == 3'b111)//every cycle(render 8 pixels) renew the value of register, move to the next tile
-                begin
-                    //bitmap data for the next tile loaded into the upper 8 bits
-                    //4(2*2)tile's palette number is the same
-                    d_bit_shift_0[15]   = q_palette_data_0[0];
-                    d_bit_shift_0[14]   = q_palette_data_0[1];                  //the order is opposite:
-                    d_bit_shift_0[13]   = q_palette_data_0[2];                  //the coordinate
-                    d_bit_shift_0[12]   = q_palette_data_0[3];                  // 0 ----------> 
-                    d_bit_shift_0[11]   = q_palette_data_0[4];                  //the bit count
-                    d_bit_shift_0[10]   = q_palette_data_0[5];                  // <---------- 0
-                    d_bit_shift_0[9]    = q_palette_data_0[6];
-                    d_bit_shift_0[8]    = q_palette_data_0[7];
-                    d_bit_shift_1[15]   = q_palette_data_1[0];
-                    d_bit_shift_1[14]   = q_palette_data_1[1];
-                    d_bit_shift_1[13]   = q_palette_data_1[2];
-                    d_bit_shift_1[12]   = q_palette_data_1[3];
-                    d_bit_shift_1[11]   = q_palette_data_1[4];
-                    d_bit_shift_1[10]   = q_palette_data_1[5];
-                    d_bit_shift_1[9]    = q_palette_data_1[6];
-                    d_bit_shift_1[8]    = q_palette_data_1[7];
-                    d_bit_shift_2[8]    = q_attribute_table_data[0];
-                    d_bit_shift_3[8]    = q_attribute_table_data[1]; 
-                end  
-            end
-        end
-    end
-end
-
-always @*
-begin
-    update_horizontal_counter       = 1'b0;
-    increment_horizontal_counter    = 1'b0;
-    update_vertical_counter         = 1'b0;
-    increment_vertical_counter      = 1'b0;
-    if (background_display_in)
-    begin
-        if (current_y_in < 239 || next_y_in == 0)//when in the visible scanlines or the last line og invisible scanlines, prepare the data
-        begin
-            if (current_x_in == 319 && pix_pulse_in)
-            begin 
-                update_horizontal_counter = 1'b1;
-                if (next_y_in != current_y_in)
-                begin
-                    if (next_y_in == 0)
-                        update_vertical_counter = 1'b1;
-                    else
-                        increment_vertical_counter = 1'b1;
-                end
-            end
-            if (current_x_in < 256 || (current_x_in >= 320 && current_x_in < 336))//shift the bit during a cycle
-            begin
-                if (pix_pulse_in && current_x_in[2:0] == 3'b111)//every cycle(render 8 pixels) renew the value of register, move to the next tile
-                begin
-                    increment_horizontal_counter = 1'b1; 
-                end
-            end
-        end
-    end
-end
-
-always @*
-begin
-    increment_horizontal_counter = 1'b1; 
-    if (background_display_in)
-    begin
-        if (current_y_in < 239 || next_y_in == 0)//when in the visible scanlines or the last line og invisible scanlines, prepare the data
-        begin
-            if (current_x_in < 256 || (current_x_in >= 320 && current_x_in < 336))//shift the bit during a cycle
-            begin
-                case (current_x_in[2:0])//read the data
+                case (current_x_in[2:0])
                 3'b000:
                 begin
                     vram_address_select = 3'b000;
@@ -268,6 +223,35 @@ begin
     end
 end
     
+always @*
+begin
+    update_vertical_counter         = 1'b0;
+    increment_vertical_counter      = 1'b0;
+    update_horizontal_counter       = 1'b0;
+    increment_horizontal_counter    = 1'b0;
+    if (background_display_in)
+    begin
+        if ((current_y_in < 239) || (next_y_in == 0))
+        begin
+            if (pix_pulse_in && (current_x_in == 319))
+            begin
+                update_horizontal_counter = 1'b1;
+                if (next_y_in != current_y_in)
+                begin
+                    if (next_y_in == 0)
+                        update_vertical_counter = 1'b1;
+                    else
+                        increment_vertical_counter = 1'b1;
+                end
+            end
+            if (pix_pulse_in && (current_x_in[2:0] == 3'h7))
+            begin
+                increment_horizontal_counter = 1'b1;
+            end
+        end
+    end
+end
+
 //change the coordinate
 always @*
 begin
@@ -297,29 +281,31 @@ begin
             if (q_coarse_Y == 5'b11101 && q_fine_Y == 3'b111)//the last line
             begin
                 d_fine_Y = 3'b000;
-                d_nametable_select[1] = ~q_nametable_select[1];
-                d_coarse_Y = 5'b00000;
+                d_nametable_select[1]   = ~q_nametable_select[1];
+                d_nametable_select[0]   = q_nametable_select[0];
+                d_coarse_X              = q_coarse_X;
+                d_coarse_Y              = 5'b00000;
             end
             else
                 {d_nametable_select[1], d_coarse_Y, d_fine_Y} = {q_nametable_select[1], q_coarse_Y, q_fine_Y} + 9'h001;
         end
         if (update_vertical_counter)
         begin
-            d_fine_Y = fine_Y_in;
-            d_coarse_Y = coarse_Y_in;
-            d_nametable_select[1] = nametable_select_in[1];
+            d_fine_Y                = fine_Y_in;
+            d_coarse_Y              = coarse_Y_in;
+            d_nametable_select[1]   = nametable_select_in[1];
         end
         if (update_horizontal_counter)
         begin
-            d_coarse_X = coarse_X_in;
-            d_nametable_select[0] = nametable_select_in[0];
+            d_coarse_X              = coarse_X_in;
+            d_nametable_select[0]   = nametable_select_in[0];
         end
         if (update_counter_in)
         begin
-            d_fine_Y = fine_Y_in;
-            d_coarse_X = coarse_X_in;
-            d_coarse_Y = coarse_Y_in;
-            d_nametable_select = nametable_select_in;
+            d_fine_Y                = fine_Y_in;
+            d_coarse_X              = coarse_X_in;
+            d_coarse_Y              = coarse_Y_in;
+            d_nametable_select      = nametable_select_in;
         end
     end
 end 
@@ -378,10 +364,10 @@ begin
         vram_address_out[2:0]   = q_fine_Y;
     end
     //yyy NN YYYYY XXXXX nametable
-        //||| || ||||| +++++ -- coarse X scroll
-        //||| || +++++ -------- coarse Y scroll
-        //||| ++ -------------- namestable select
-        //+++ ----------------- fine Y scroll(it's no use)
+    //||| || ||||| +++++ -- coarse X scroll
+    //||| || +++++ -------- coarse Y scroll
+    //||| ++ -------------- namestable select
+    //+++ ----------------- fine Y scroll(it's no use)
     3'b100://rgister
     begin
         vram_address_out[13:12] = q_fine_Y[1:0];
